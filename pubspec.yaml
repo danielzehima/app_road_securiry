@@ -1,0 +1,23 @@
+name: app_road_security
+description: Assistant de sécurité routière pour la Côte d'Ivoire - alertes de vitesse et zones sensibles.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  geolocator: ^13.0.1
+  flutter_tts: ^4.0.2
+  audioplayers: ^6.1.0
+  wakelock_plus: ^1.2.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
