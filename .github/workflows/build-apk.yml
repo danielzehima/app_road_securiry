@@ -21,7 +21,10 @@ jobs:
           cache: true
 
       - name: Générer le projet Android
-        run: flutter create . --platforms android --project-name app_road_security --org ci.roadsecurity
+        run: |
+          flutter create . --platforms android --project-name app_road_security --org ci.roadsecurity
+          # Supprime le test d'exemple généré par Flutter (il vise une app « MyApp » qui n'existe pas)
+          rm -f test/widget_test.dart
 
       - name: Ajouter les autorisations Android
         run: |

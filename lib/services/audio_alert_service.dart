@@ -72,8 +72,8 @@ class AudioAlertService {
   static Uint8List _buildBeepWav() {
     const sampleRate = 22050;
     const toneMs = 180, gapMs = 90, freq = 880.0;
-    final toneLen = sampleRate * toneMs ~/ 1000;
-    final gapLen = sampleRate * gapMs ~/ 1000;
+    const toneLen = sampleRate * toneMs ~/ 1000;
+    const gapLen = sampleRate * gapMs ~/ 1000;
     final total = toneLen * 2 + gapLen;
 
     final pcm = Int16List(total);
