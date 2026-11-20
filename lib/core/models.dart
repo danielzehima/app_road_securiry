@@ -19,7 +19,9 @@ enum ZoneType {
   controle('Zone de contrôle'),
   ecole('École'),
   village('Traversée de village'),
-  danger('Virage dangereux');
+  danger('Virage dangereux'),
+  carrefour('Carrefour'),
+  monLieu('Lieu marqué');
 
   final String label;
   const ZoneType(this.label);
@@ -58,5 +60,22 @@ class GpsSample {
     required this.speedKmh,
     required this.accuracyM,
     required this.time,
+  });
+}
+
+/// Itinéraire : un tracé (pour le mode démo) et ses zones sensibles.
+class DrivingRoute {
+  final String id;
+  final String name;
+
+  /// Points successifs du trajet, dans l'ordre de passage.
+  final List<LatLng> path;
+  final List<Zone> zones;
+
+  const DrivingRoute({
+    required this.id,
+    required this.name,
+    required this.path,
+    required this.zones,
   });
 }

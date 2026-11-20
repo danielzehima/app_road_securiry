@@ -106,7 +106,8 @@ class EngineResult {
 class AlertEngine {
   AlertConfig config;
   RoadType roadType;
-  final List<Zone> zones;
+  /// Zones actives (itinéraire choisi + lieux marqués). Modifiable en cours de route.
+  List<Zone> zones;
 
   AlertEngine({
     required this.zones,

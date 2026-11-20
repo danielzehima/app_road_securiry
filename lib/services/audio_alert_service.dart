@@ -45,8 +45,9 @@ class AudioAlertService {
       case ZoneApproach(:final zone, :final distanceM):
         await HapticFeedback.mediumImpact();
         await _player.play(BytesSource(_beep));
+        final what = zone.type == ZoneType.carrefour ? zone.name : _zoneWord(zone.type);
         await _tts.speak(
-          '${_zoneWord(zone.type)} dans ${_roundDistance(distanceM)} mètres. '
+          '$what dans ${_roundDistance(distanceM)} mètres. '
           'Limite ${zone.limitKmh}.',
         );
       case OverspeedEnded():
@@ -64,6 +65,8 @@ class AudioAlertService {
         ZoneType.ecole => 'École',
         ZoneType.village => 'Traversée de village',
         ZoneType.danger => 'Virage dangereux',
+        ZoneType.carrefour => 'Carrefour',
+        ZoneType.monLieu => 'Lieu marqué',
       };
 
   static int _roundDistance(double m) => ((m / 100).round() * 100).clamp(100, 5000);

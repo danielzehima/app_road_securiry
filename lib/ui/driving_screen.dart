@@ -5,10 +5,11 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/alert_engine.dart';
 import '../core/models.dart';
-import '../data/test_zones.dart';
+import '../data/routes.dart';
 import '../services/audio_alert_service.dart';
 import '../services/demo_source.dart';
 import '../services/location_service.dart';
+import '../services/my_places_store.dart';
 
 /// Écran de conduite : vitesse, limite, prochaine zone, alertes sonores.
 class DrivingScreen extends StatefulWidget {
@@ -19,9 +20,14 @@ class DrivingScreen extends StatefulWidget {
 }
 
 class _DrivingScreenState extends State<DrivingScreen> {
-  final _engine = AlertEngine(zones: testZones);
+  final _engine = AlertEngine(zones: List.of(bingervilleYopougon.zones));
   final _audio = AudioAlertService();
   final _location = LocationService();
+  final _store = MyPlacesStore();
+
+  DrivingRoute _route = bingervilleYopougon;
+  List<Zone> _myPlaces = [];
+  GpsSample? _lastSample;
 
   StreamSubscription<GpsSample>? _sub;
   DrivingState? _state;
@@ -33,6 +39,59 @@ class _DrivingScreenState extends State<DrivingScreen> {
   void initState() {
     super.initState();
     _audio.init();
+    _store.load().then((places) {
+      if (!mounted) return;
+      setState(() => _myPlaces = places);
+      _applyZones();
+    });
+  }
+
+  /// Zones actives = zones de l'itinéraire choisi + lieux marqués.
+  void _applyZones() {
+    _engine.zones = [..._route.zones, ..._myPlaces];
+  }
+
+  Future<void> _markPlace() async {
+    final s = _lastSample;
+    if (_demo != null || s == null || s.accuracyM > 30) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Position GPS indisponible ou trop imprécise (mode démo désactivé requis).'),
+      ));
+      return;
+    }
+    final place = Zone(
+      id: 'mine-${s.time.millisecondsSinceEpoch}',
+      type: ZoneType.monLieu,
+      name: 'Mon lieu ${_myPlaces.length + 1}',
+      center: s.position,
+      limitKmh: _engine.roadType.defaultLimitKmh,
+    );
+    setState(() => _myPlaces = [..._myPlaces, place]);
+    _applyZones();
+    await _store.save(_myPlaces);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${place.name} enregistré '
+          '(${s.position.lat.toStringAsFixed(5)}, ${s.position.lng.toStringAsFixed(5)})'),
+    ));
+  }
+
+  Future<void> _clearPlaces() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Effacer mes lieux ?'),
+        content: Text('${_myPlaces.length} lieu(x) marqué(s) seront supprimés.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Effacer')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _myPlaces = []);
+    _applyZones();
+    await _store.save(_myPlaces);
   }
 
   @override
@@ -46,8 +105,8 @@ class _DrivingScreenState extends State<DrivingScreen> {
   Future<void> _start() async {
     Stream<GpsSample> stream;
     if (_demoMode) {
-      // Zone « école » (limite 30) : on voit l'annonce puis le changement de limite.
-      _demo = DemoSource(target: testZones[1], speedKmh: 50);
+      // Le véhicule simulé suit le tracé de l'itinéraire choisi.
+      _demo = DemoSource(path: _route.path, speedKmh: 50);
       stream = _demo!.samples();
     } else {
       final status = await _location.ensurePermission();
@@ -76,6 +135,7 @@ class _DrivingScreenState extends State<DrivingScreen> {
   }
 
   void _onSample(GpsSample sample) {
+    _lastSample = sample;
     final result = _engine.onSample(sample);
     if (!mounted) return;
     setState(() => _state = result.state);
@@ -166,6 +226,18 @@ class _DrivingScreenState extends State<DrivingScreen> {
             icon: const Icon(Icons.tune),
             onPressed: _editTolerance,
           ),
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'clear') _clearPlaces();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'clear',
+                enabled: _myPlaces.isNotEmpty,
+                child: Text('Effacer mes lieux (${_myPlaces.length})'),
+              ),
+            ],
+          ),
         ],
       ),
       body: SafeArea(
@@ -182,9 +254,34 @@ class _DrivingScreenState extends State<DrivingScreen> {
                 selected: {_engine.roadType},
                 onSelectionChanged: (sel) => setState(() => _engine.roadType = sel.first),
               ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: _route.id,
+                decoration: const InputDecoration(
+                  labelText: 'Itinéraire',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: [
+                  for (final r in allRoutes)
+                    DropdownMenuItem(value: r.id, child: Text(r.name, overflow: TextOverflow.ellipsis)),
+                ],
+                onChanged: _running
+                    ? null
+                    : (id) {
+                        setState(() => _route = allRoutes.firstWhere((r) => r.id == id));
+                        _applyZones();
+                      },
+              ),
               Expanded(child: _SpeedPanel(state: s, running: _running)),
               _NextZoneCard(state: s),
               if (_running && _demo != null) _demoSlider(),
+              if (_running && _demo == null)
+                OutlinedButton.icon(
+                  onPressed: _markPlace,
+                  icon: const Icon(Icons.add_location_alt),
+                  label: Text('Marquer ce lieu (${_myPlaces.length} enregistré(s))'),
+                ),
               const SizedBox(height: 8),
               Row(
                 children: [

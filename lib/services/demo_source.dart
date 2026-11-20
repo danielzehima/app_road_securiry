@@ -4,31 +4,52 @@ import 'dart:math' as math;
 import '../core/geo.dart';
 import '../core/models.dart';
 
-/// Source GPS simulée pour essayer l'application sans rouler :
-/// un véhicule part à 1,5 km d'une zone et roule droit vers elle,
-/// à la vitesse réglée par le curseur de l'écran.
+/// Source GPS simulée : un véhicule suit le tracé [path] point par point,
+/// à la vitesse réglée par le curseur, puis recommence au début.
 class DemoSource {
-  final Zone target;
+  final List<LatLng> path;
   double speedKmh;
 
-  DemoSource({required this.target, this.speedKmh = 50});
+  late final List<double> _cumul = _cumulative(path);
+  double _travelled = 0;
+
+  DemoSource({required this.path, this.speedKmh = 50}) : assert(path.length >= 2);
+
+  /// Distance parcourue sur le tracé (m) et longueur totale.
+  double get travelledM => _travelled;
+  double get totalM => _cumul.last;
+
+  static List<double> _cumulative(List<LatLng> p) {
+    final out = <double>[0];
+    for (var i = 1; i < p.length; i++) {
+      out.add(out.last + distanceMeters(p[i - 1], p[i]));
+    }
+    return out;
+  }
+
+  /// Position sur le tracé après [d] mètres (interpolation linéaire).
+  LatLng _positionAt(double d) {
+    for (var i = 1; i < path.length; i++) {
+      if (d <= _cumul[i]) {
+        final seg = _cumul[i] - _cumul[i - 1];
+        final f = seg == 0 ? 0.0 : (d - _cumul[i - 1]) / seg;
+        final a = path[i - 1], b = path[i];
+        return LatLng(a.lat + (b.lat - a.lat) * f, a.lng + (b.lng - a.lng) * f);
+      }
+    }
+    return path.last;
+  }
 
   Stream<GpsSample> samples() {
-    // Point de départ : 1 500 m au sud de la zone (1° de latitude ≈ 111 km).
-    var lat = target.center.lat - 1500 / 111000;
-    final lng = target.center.lng;
     final controller = StreamController<GpsSample>();
     Timer? timer;
 
     controller.onListen = () {
       timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        lat += (speedKmh / 3.6) / 111000;
-        // Une fois la zone dépassée de 1 km, on recommence.
-        if (lat > target.center.lat + 1000 / 111000) {
-          lat = target.center.lat - 1500 / 111000;
-        }
+        _travelled += math.max(0, speedKmh) / 3.6;
+        if (_travelled > totalM) _travelled = 0;
         controller.add(GpsSample(
-          position: LatLng(lat, lng),
+          position: _positionAt(_travelled),
           speedKmh: math.max(0, speedKmh),
           accuracyM: 5,
           time: DateTime.now(),
